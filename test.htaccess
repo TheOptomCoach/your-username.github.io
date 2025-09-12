@@ -1,0 +1,4 @@
+RewriteEngine On
+RewriteCond %{HTTP_REFERER} !^https://your-notion-subdomain.notion.site/ [NC]
+RewriteCond %{HTTP_REFERER} !^https://notion.so/ [NC]
+RewriteRule \.(html|css|js)$ - [F]
