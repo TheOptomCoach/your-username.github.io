@@ -3,30 +3,64 @@
   <title>UK Locum Optometry Shifts Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
   <style>
+    /* Hide unwanted controls */
+    #replaceMode,
+    label[for="replaceMode"],
+    #parseBtn,
+    #saveBtn,
+    #downloadBtn,
+    #clearBtn,
+    #rawData {
+      display: none !important;
+    }
+
     body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
     #map { height: 100vh; }
+
+    /* Center and enlarge filter chooser */
+    #mode {
+      display: block;
+      margin: 20px auto;   /* centers horizontally */
+      font-size: 18px;     /* bigger text */
+      padding: 10px 20px;  /* bigger click area */
+      width: auto;         /* shrink to fit content */
+      min-width: 250px;    /* ensures good size */
+      text-align: center;  /* center option text */
+    }
+
+    /* Simplify controls box */
     #controls {
       position: absolute;
-      top: 10px; left: 10px;
-      background: white; padding: 10px; z-index: 1000;
-      border-radius: 5px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.3);
-      width: 300px;
+      top: 10px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      background: transparent;
+      padding: 0;
+      border-radius: 0;
+      box-shadow: none;
+      width: 100%;
+      z-index: 1000;
     }
+
     textarea { width: 100%; height: 150px; }
     button, select, progress { margin-top: 5px; width: 100%; }
     .button-group { display: flex; gap: 5px; }
     .button-group button { flex: 1; }
+
     #dataStatus { 
       margin-top: 10px; 
       padding: 5px; 
       background: #e8f4f8; 
       border-radius: 3px;
       font-size: 12px;
+      display: inline-block;
     }
+
     #downloadBtn { background-color: #4CAF50; color: white; }
     #clearBtn { background-color: #f44336; color: white; }
     #replaceMode { margin-top: 5px; }
+
     .checkbox-container { 
       display: flex; 
       align-items: center; 
@@ -34,9 +68,50 @@
       font-size: 14px;
       margin-bottom: 5px;
     }
+    #passwordOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.password-box {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.password-box input, .password-box button {
+  margin-top: 10px;
+  padding: 8px;
+  width: 200px;
+}
+
+#passwordMessage {
+  color: red;
+  margin-top: 10px;
+}
   </style>
 </head>
 <body class="">
+
+<div id="passwordOverlay">
+  <div class="password-box">
+    <h3>Please enter the password</h3>
+    <input type="password" id="passwordInput" placeholder="Password">
+    <button id="submitPassword">Submit</button>
+    <p id="passwordMessage"></p>
+  </div>
+</div>
 
 <div id="controls">
   <textarea id="rawData" placeholder="Paste your raw shift data here..."></textarea><br>
@@ -8098,22 +8173,45 @@ async function geocodeLocations(shifts) {
 }
 
 function updateMap(locations) {
-  markersLayer.clearLayers();
-  const mode = document.getElementById('mode').value;
+  markersLayer.clearLayers();
+  const mode = document.getElementById('mode').value;
 
-  if (mode === 'total') {
-    for (const loc of locations) {
-      for (const shift of loc.shifts) {
-        const color = shift.total >= 400 ? "green" : shift.total >= 325 ? "orange" : "red";
-        const marker = L.circleMarker([loc.lat, loc.lon], {
-          radius: 2,
-          color,
-          fillOpacity: 0.2
-        }).bindPopup(`<b>${loc.name}</b><br>Total Pay: £${shift.total.toFixed(2)}<br>Company: ${shift.company}`);
-        markersLayer.addLayer(marker);
-      }
-    }
-} else if (mode === 'Density And Companies') {
+  // This is the new, corrected code block for the 'total' pay mode.
+  if (mode === 'total') {
+    // Define a map of color names to RGB values for the gradient
+    const colorMap = {
+      green: "0, 128, 0",   // Green
+      orange: "255, 165, 0", // Orange
+      red: "255, 0, 0"      // Red
+    };
+
+    for (const loc of locations) {
+      for (const shift of loc.shifts) {
+        // Determine the color name based on the total
+        const colorName = shift.total >= 400 ? "green" : shift.total >= 325 ? "orange" : "red";
+        const rgb = colorMap[colorName]; // Get the corresponding RGB value
+
+        // Set the diameter for our circular marker
+        const markerDiameter = 30; // Increased size for better visibility
+
+        // Create a custom icon using L.divIcon
+        const gradientIcon = L.divIcon({
+          className: 'custom-gradient-icon', // Optional class for other fixed styles
+          // The HTML is a div with an inline style for the radial gradient
+          html: `<div style="background: radial-gradient(circle, rgba(${rgb}, 1) 0%, rgba(${rgb}, 0) 50%); width: 100%; height: 100%; border-radius: 50%;"></div>`,
+          iconSize: [markerDiameter, markerDiameter], // Size of the icon
+          iconAnchor: [markerDiameter / 2, markerDiameter / 2] // Anchor point (center of the circle)
+        });
+
+        // Create a standard marker with our custom gradient icon
+        const marker = L.marker([loc.lat, loc.lon], {
+          icon: gradientIcon
+        }).bindPopup(`<b>${loc.name}</b><br>Total Pay: £${shift.total.toFixed(2)}<br>Company: ${shift.company}`);
+        
+        markersLayer.addLayer(marker);
+      }
+    }
+  } else if (mode === 'Density And Companies') {
     for (const loc of locations) {
       // 1. Determine the marker colour based on the company name
       let markerColor = "#7F8C8D"; // Default grey colour
@@ -8137,42 +8235,63 @@ function updateMap(locations) {
       const customIcon = L.divIcon({
         html: svgIcon,
         className: "", // Important to reset Leaflet's default icon styling
-        iconSize: [15, 15],
-        iconAnchor: [6, 12], // Center horizontally and anchor at bottom
-        popupAnchor: [0, -12] // Adjust popup position accordingly
+        iconSize: [22, 22], // Size of the icon
+        iconAnchor: [13, 13], // Center horizontally and anchor at bottom
+        popupAnchor: [0, -5] // Adjust popup position accordingly
       });
       // 4. Create the marker and add it to the map
       const marker = L.marker([loc.lat, loc.lon], { icon: customIcon })
-        .bindPopup(`<b>${loc.name}</b><br>Companies: ${loc.companies.join(", ")}`);
+        .bindPopup(`<b>${loc.name}</b><br>Companies: ${loc.companies.join(", ")}<br>Available Shifts: ${loc.count}`);
       
       markersLayer.addLayer(marker);
     }
-  } else if (mode === 'frequency') {
-    // This is the updated block for the shift frequency view
-    for (const loc of locations) {
-      let color, radius, fillOpacity;
+  } else if (mode === 'frequency') {
+    // This is the updated block for the shift frequency view
+    for (const loc of locations) {
+      let color, radius, fillOpacity;
 
-      if (loc.count >= 3) {
-        // Settings for high-frequency locations
-        color = "green";
-        radius = 3 + Math.log(loc.count); // Scale size based on shift count
-        fillOpacity = 0.5;
-      } else {
-        // Settings for low-frequency locations (smaller and more transparent)
-        color = "White";
-        radius = 1; // A smaller, fixed size
-        fillOpacity = 0.1; // More transparent
-      }
+      if (loc.count >= 3) {
+        // Settings for high-frequency locations
+        color = "green";
+        radius = 8 + Math.log(loc.count); // Scale size based on shift count
+        fillOpacity = 0.5;
+      } else {
+        // Settings for low-frequency locations (smaller and more transparent)
+        color = "White";
+        radius = 1; // A smaller, fixed size
+        fillOpacity = 0.1; // More transparent
+      }
 
-      const marker = L.circleMarker([loc.lat, loc.lon], {
-        radius: radius,
-        color: color,
-        fillOpacity: fillOpacity
-      }).bindPopup(`<b>${loc.name}</b><br>Companies: ${loc.companies.join(", ")}<br>Available Shifts: ${loc.count}`);
-      markersLayer.addLayer(marker);
-    }
-  }
+      const marker = L.circleMarker([loc.lat, loc.lon], {
+        radius: radius,
+        color: color,
+        fillOpacity: fillOpacity
+      }).bindPopup(`<b>${loc.name}</b><br>Companies: ${loc.companies.join(", ")}<br>Available Shifts: ${loc.count}`);
+      markersLayer.addLayer(marker);
+    }
+  }
 }
+const correctPassword = "1Jnf¬!'?}."; // <-- Replace with your password
+
+const passwordOverlay = document.getElementById('passwordOverlay');
+const passwordInput = document.getElementById('passwordInput');
+const submitPasswordBtn = document.getElementById('submitPassword');
+const passwordMessage = document.getElementById('passwordMessage');
+
+submitPasswordBtn.addEventListener('click', () => {
+  if (passwordInput.value === correctPassword) {
+    passwordOverlay.style.display = 'none'; // Hide the overlay
+  } else {
+    passwordMessage.textContent = 'Incorrect password. Please try again.';
+  }
+});
+
+// Optional: Allow pressing Enter to submit
+passwordInput.addEventListener('keypress', (event) => {
+  if (event.key === 'Enter') {
+    submitPasswordBtn.click();
+  }
+});
 </script>
 
 
